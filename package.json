@@ -1,0 +1,16 @@
+{
+  "name": "laundro",
+  "version": "1.0.0",
+  "description": "A Laundry Management System",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Peter Mba Akasi",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "nodemon": "^3.1.11"
+  }
+}
