@@ -16,7 +16,7 @@ const shopSchema = new mongoose.Schema(
       validate: [validator.isEmail, "Please provide a valid email address"],
     },
     phoneNumber: {
-      type: Number,
+      type: String,
       required: [true, "Please provide phone number"],
       unique: true,
       validate: [
