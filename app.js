@@ -4,12 +4,10 @@ const shopRouter = require("./routes/shopRoutes");
 
 const app = express();
 
+// for API requests sending JSON
 app.use(express.json());
+// for traditional HTML form submissions
 app.use(express.urlencoded({ extended: true }));
-
-// app.get("/", (req, res) => {
-//   res.send("Hello World");
-// });
 
 app.use("/api/v1/shops", shopRouter);
 
