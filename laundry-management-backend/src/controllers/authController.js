@@ -94,9 +94,13 @@ const login = async (req, res) => {
  * @route   POST /api/auth/otp-request
  * @access  Public
  */
-// In-memory OTP store for MVP (Production should use Redis)
-const otpStore = {}; 
+const Otp = require('../models/Otp');
 
+/**
+ * @desc    Request OTP for Employee Login
+ * @route   POST /api/auth/otp-request
+ * @access  Public
+ */
 const requestOtp = async (req, res) => {
   const { phoneNumber } = req.body;
 
@@ -109,7 +113,15 @@ const requestOtp = async (req, res) => {
 
     // Mock OTP generation
     const otp = '123456';
-    otpStore[phoneNumber] = otp;
+    
+    // Clear existing OTPs for this number
+    await Otp.deleteMany({ phoneNumber });
+    
+    // Save new OTP to DB
+    await Otp.create({
+      phoneNumber,
+      otp
+    });
 
     console.log(`[MOCK OTP] OTP for ${phoneNumber} is ${otp}`);
 
@@ -127,19 +139,28 @@ const requestOtp = async (req, res) => {
 const verifyOtp = async (req, res) => {
   const { phoneNumber, otp } = req.body;
 
-  if (otpStore[phoneNumber] === otp) {
-    const user = await User.findOne({ email: phoneNumber });
-    if (!user) return res.status(401).json({ success: false });
+  try {
+    // Find valid OTP
+    const validOtp = await Otp.findOne({ phoneNumber, otp });
 
-    const token = generateToken(user.id, user.role);
-    delete otpStore[phoneNumber]; // Single use
+    if (validOtp) {
+      const user = await User.findOne({ email: phoneNumber });
+      if (!user) return res.status(401).json({ success: false, message: 'User not found' });
 
-    user.lastLoginAt = new Date();
-    await user.save();
+      const token = generateToken(user.id, user.role);
+      
+      // Delete used OTP (Single use)
+      await Otp.deleteOne({ _id: validOtp._id });
 
-    res.json({ success: true, token });
-  } else {
-    res.status(401).json({ success: false, message: 'Invalid OTP' });
+      user.lastLoginAt = new Date();
+      await user.save();
+
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+  } catch (error) {
+     res.status(500).json({ success: false, message: error.message });
   }
 };
 
