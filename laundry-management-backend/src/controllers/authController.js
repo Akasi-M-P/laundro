@@ -7,9 +7,10 @@ const { SubscriptionStatus } = Shop;
 // const { logAudit } = require('../utils/logger'); // Unused in original TS, but imported
 
 // Helper to sign JWT
+// Helper to sign JWT
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET || 'secret', {
-    expiresIn: '30d'
+    expiresIn: process.env.JWT_EXPIRE || '1d'
   });
 };
 
