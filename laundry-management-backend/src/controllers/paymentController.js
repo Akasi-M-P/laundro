@@ -1,16 +1,17 @@
-import { Request, Response } from 'express';
-import Payment, { PaymentMethod } from '../models/Payment';
-import Order, { OrderStatus } from '../models/Order';
-import { logAudit } from '../utils/logger';
+const Payment = require('../models/Payment');
+const Order = require('../models/Order');
+const { PaymentMethod } = Payment;
+const { OrderStatus } = Order;
+const { logAudit } = require('../utils/logger');
 
 /**
  * @desc    Record a new payment for an order
  * @route   POST /api/payments
  * @access  Employee/Owner
  */
-export const recordPayment = async (req: Request, res: Response) => {
+const recordPayment = async (req, res) => {
   const { orderId, amount, method, offlineId, createdAt } = req.body;
-  const user = req.user!;
+  const user = req.user;
 
   try {
     const order = await Order.findOne({ _id: orderId, shopId: user.shopId });
@@ -43,10 +44,8 @@ export const recordPayment = async (req: Request, res: Response) => {
 
     // Update Order Balance and Amount Paid
     order.amountPaid += Number(amount);
-    // Balance is calculated in pre-save hook of Order model: this.balance = this.totalAmount - this.amountPaid;
     
     // If order was CREATED and now has payment, likely PROCESSING?
-    // Spec: "Order becomes PROCESSING when payment... occurs"
     if (order.status === OrderStatus.CREATED) {
       order.status = OrderStatus.PROCESSING;
     }
@@ -57,6 +56,8 @@ export const recordPayment = async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, data: payment });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
+module.exports = { recordPayment };

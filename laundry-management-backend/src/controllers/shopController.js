@@ -1,13 +1,12 @@
-import { Request, Response } from 'express';
-import Shop, { SubscriptionStatus } from '../models/Shop'; // Corrected import
-import { logAudit } from '../utils/logger';
+const Shop = require('../models/Shop');
+const { logAudit } = require('../utils/logger');
 
 /**
  * @desc    Suspend Shop (Admin only)
  * @route   PUT /api/shops/:id/suspend
  * @access  Admin
  */
-export const updateShopStatus = async (req: Request, res: Response) => {
+const updateShopStatus = async (req, res) => {
   const { status, reason } = req.body;
   const { id } = req.params;
 
@@ -27,6 +26,8 @@ export const updateShopStatus = async (req: Request, res: Response) => {
 
     res.json({ success: true, data: shop });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
+module.exports = { updateShopStatus };

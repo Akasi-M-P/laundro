@@ -1,11 +1,13 @@
-import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import User, { IUser, UserRole } from '../models/User';
-import Shop, { SubscriptionStatus } from '../models/Shop';
-import { logAudit } from '../utils/logger';
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const Shop = require('../models/Shop');
+// Destructure enums/constants attached to models
+const { UserRole } = User;
+const { SubscriptionStatus } = Shop;
+// const { logAudit } = require('../utils/logger'); // Unused in original TS, but imported
 
 // Helper to sign JWT
-const generateToken = (id: string, role: string) => {
+const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET || 'secret', {
     expiresIn: '30d'
   });
@@ -16,7 +18,7 @@ const generateToken = (id: string, role: string) => {
  * @route   POST /api/auth/register-shop
  * @access  Public
  */
-export const registerShop = async (req: Request, res: Response) => {
+const registerShop = async (req, res) => {
   const { businessName, phone, location, ownerName, email, password } = req.body;
 
   try {
@@ -41,9 +43,6 @@ export const registerShop = async (req: Request, res: Response) => {
     // 3. Generate Token
     const token = generateToken(user.id, user.role);
 
-    // 4. Audit Log (System action conceptually, but we can log user creation)
-    // Note: We don't have a req.user yet, so we skip audit or log as system if we had a system user.
-
     res.status(201).json({
       success: true,
       data: {
@@ -53,7 +52,7 @@ export const registerShop = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -62,7 +61,7 @@ export const registerShop = async (req: Request, res: Response) => {
  * @route   POST /api/auth/login
  * @access  Public
  */
-export const login = async (req: Request, res: Response) => {
+const login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
@@ -85,7 +84,7 @@ export const login = async (req: Request, res: Response) => {
       token
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -95,20 +94,11 @@ export const login = async (req: Request, res: Response) => {
  * @access  Public
  */
 // In-memory OTP store for MVP (Production should use Redis)
-const otpStore: Record<string, string> = {}; 
+const otpStore = {}; 
 
-export const requestOtp = async (req: Request, res: Response) => {
-  const { phoneNumber } = req.body; // Assuming username or phone identifies employee
+const requestOtp = async (req, res) => {
+  const { phoneNumber } = req.body;
 
-  // MVP: We need to find the user. Since spec says "Passwordless login", 
-  // we assume we identify them by name+shop or unique phone. 
-  // For MVP let's assume `email` field stores a unique phone-like identifier for employees OR we add a phone field to User.
-  // Actually User model has optional email. Let's assume for MVP we use 'email' field to store unique username/phone string if needed.
-  // OR we can search by name if unique within shop? Unsafe.
-  // Let's rely on 'email' field containing a unique ID/Phone for now as per schema provided earlier.
-
-  // NOTE: Schema has `email` as unique sparse.
-  
   try {
     const user = await User.findOne({ email: phoneNumber, role: UserRole.EMPLOYEE });
     
@@ -124,7 +114,7 @@ export const requestOtp = async (req: Request, res: Response) => {
 
     res.json({ success: true, message: 'OTP sent (Check console)' });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -133,7 +123,7 @@ export const requestOtp = async (req: Request, res: Response) => {
  * @route   POST /api/auth/otp-verify
  * @access  Public
  */
-export const verifyOtp = async (req: Request, res: Response) => {
+const verifyOtp = async (req, res) => {
   const { phoneNumber, otp } = req.body;
 
   if (otpStore[phoneNumber] === otp) {
@@ -150,4 +140,11 @@ export const verifyOtp = async (req: Request, res: Response) => {
   } else {
     res.status(401).json({ success: false, message: 'Invalid OTP' });
   }
+};
+
+module.exports = {
+  registerShop,
+  login,
+  requestOtp,
+  verifyOtp
 };

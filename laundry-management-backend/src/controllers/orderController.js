@@ -1,19 +1,21 @@
-import { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import Order, { OrderStatus } from '../models/Order';
-import Payment, { PaymentMethod } from '../models/Payment';
-import { generatePin, hashPin, verifyPin } from '../utils/pin';
-import { logAudit } from '../utils/logger';
-import Shop, { SubscriptionStatus } from '../models/Shop';
+const mongoose = require('mongoose');
+const Order = require('../models/Order');
+const Payment = require('../models/Payment');
+const Shop = require('../models/Shop');
+const { OrderStatus } = Order;
+const { PaymentMethod } = Payment;
+const { SubscriptionStatus } = Shop;
+const { generatePin, hashPin, verifyPin } = require('../utils/pin');
+const { logAudit } = require('../utils/logger');
 
 /**
  * @desc    Create new order (Offline compatible)
  * @route   POST /api/orders
  * @access  Employee/Owner
  */
-export const createOrder = async (req: Request, res: Response) => {
+const createOrder = async (req, res) => {
   const { customerId, items, totalAmount, amountPaid, offlineId, createdAt } = req.body;
-  const user = req.user!;
+  const user = req.user;
 
   try {
     // 1. Check Shop Subscription Status
@@ -31,8 +33,6 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     // 3. Create Order
-    // If amountPaid > 0, status might skip to PROCESSING? Spec: "Order becomes PROCESSING when payment... occurs"
-    // Let's default to CREATED, then check payment.
     let status = OrderStatus.CREATED;
     if (amountPaid > 0) {
       status = OrderStatus.PROCESSING;
@@ -68,7 +68,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, data: order });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -77,9 +77,9 @@ export const createOrder = async (req: Request, res: Response) => {
  * @route   PUT /api/orders/:id/ready
  * @access  Employee/Owner
  */
-export const markReady = async (req: Request, res: Response) => {
+const markReady = async (req, res) => {
   try {
-    const order = await Order.findOne({ _id: req.params.id, shopId: req.user!.shopId });
+    const order = await Order.findOne({ _id: req.params.id, shopId: req.user.shopId });
     
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -95,14 +95,6 @@ export const markReady = async (req: Request, res: Response) => {
     order.status = OrderStatus.READY;
     await order.save();
 
-    // In a real app, we might SMS this PIN to the customer here.
-    // For MVP, we return it in the response ONE TIME.
-    // "Pickup PIN is never shown in-app" - usually means not viewable later. 
-    // But it must be shown to the employee to give to the customer, or sent via SMS.
-    // Spec: "Pickup PIN is never shown in-app" ... "Orders cannot be collected without valid PIN".
-    // Presumption: The SYSTEM sends the PIN properly (SMS). 
-    // Since we don't have SMS mock here, I will return it in response for the "Employee" to "tell" the customer (or simulating SMS).
-
     await logAudit(req.user, 'MARK_READY', 'Order', order._id);
 
     res.json({ 
@@ -111,7 +103,7 @@ export const markReady = async (req: Request, res: Response) => {
       _tempPin: plainPin // ONLY for demo/MVP purposes
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -120,11 +112,11 @@ export const markReady = async (req: Request, res: Response) => {
  * @route   POST /api/orders/:id/collect
  * @access  Employee/Owner
  */
-export const collectOrder = async (req: Request, res: Response) => {
+const collectOrder = async (req, res) => {
   const { pin } = req.body;
 
   try {
-    const order = await Order.findOne({ _id: req.params.id, shopId: req.user!.shopId });
+    const order = await Order.findOne({ _id: req.params.id, shopId: req.user.shopId });
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -148,9 +140,9 @@ export const collectOrder = async (req: Request, res: Response) => {
 
     // Success
     order.status = OrderStatus.COLLECTED;
-    order.collectedBy = req.user!._id as mongoose.Types.ObjectId; // Cast because Type definition
+    order.collectedBy = req.user._id;
     order.collectedAt = new Date();
-    // Invalidate PIN (Single use) - actually status change prevents reuse, but clearing hash is good practice
+    // Invalidate PIN (Single use)
     order.pickupPinHash = undefined; 
     await order.save();
 
@@ -158,6 +150,12 @@ export const collectOrder = async (req: Request, res: Response) => {
 
     res.json({ success: true, data: order });
   } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.status(500).json({ success: false, message: error.message });
   }
+};
+
+module.exports = {
+  createOrder,
+  markReady,
+  collectOrder
 };

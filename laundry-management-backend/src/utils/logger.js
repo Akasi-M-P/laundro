@@ -1,6 +1,4 @@
-import AuditLog from '../models/AuditLog';
-import { IUser } from '../models/User';
-import mongoose from 'mongoose';
+const AuditLog = require('../models/AuditLog');
 
 /**
  * Log a system action
@@ -10,12 +8,12 @@ import mongoose from 'mongoose';
  * @param entityId The ID of the affected entity
  * @param metadata Additional JSON data
  */
-export const logAudit = async (
-  user: IUser | undefined,
-  action: string,
-  entity: string,
-  entityId: mongoose.Types.ObjectId | string,
-  metadata: any = {}
+const logAudit = async (
+  user,
+  action,
+  entity,
+  entityId,
+  metadata = {}
 ) => {
   try {
     if (!user) {
@@ -36,3 +34,5 @@ export const logAudit = async (
     // Don't crash the request if logging fails, but it's critical to know
   }
 };
+
+module.exports = { logAudit };

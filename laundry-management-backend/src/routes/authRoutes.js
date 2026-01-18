@@ -1,5 +1,5 @@
-import express from 'express';
-import { registerShop, login, requestOtp, verifyOtp } from '../controllers/authController';
+const express = require('express');
+const { registerShop, login, requestOtp, verifyOtp } = require('../controllers/authController');
 
 const router = express.Router();
 
@@ -8,4 +8,4 @@ router.post('/login', login);
 router.post('/otp-request', requestOtp);
 router.post('/otp-verify', verifyOtp);
 
-export default router;
+module.exports = router;

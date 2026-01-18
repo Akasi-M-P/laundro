@@ -1,13 +1,13 @@
-import express from 'express';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
-import { connectDB } from './config/db';
-import './types/custom'; // Load type augmentations
-import authRoutes from './routes/authRoutes';
-import orderRoutes from './routes/orderRoutes';
-import paymentRoutes from './routes/paymentRoutes';
-import shopRoutes from './routes/shopRoutes';
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const dotenv = require('dotenv');
+const { connectDB } = require('./config/db');
+// require('./types/custom'); // Load type augmentations (Removed in JS migration)
+const authRoutes = require('./routes/authRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const shopRoutes = require('./routes/shopRoutes');
 
 // Load env vars
 dotenv.config({ path: './config.env' }); // Adjust path if needed
@@ -42,7 +42,7 @@ const server = app.listen(PORT, () => {
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (err: any, promise) => {
+process.on('unhandledRejection', (err, promise) => {
   console.log(`Error: ${err.message}`);
   // Close server & exit process
   server.close(() => process.exit(1));

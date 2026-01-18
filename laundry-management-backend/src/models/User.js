@@ -1,24 +1,14 @@
-import mongoose, { Document, Schema } from 'mongoose';
-import bcrypt from 'bcryptjs';
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const { Schema } = mongoose;
 
-export enum UserRole {
-  ADMIN = 'ADMIN',
-  OWNER = 'OWNER',
-  EMPLOYEE = 'EMPLOYEE'
-}
+const UserRole = {
+  ADMIN: 'ADMIN',
+  OWNER: 'OWNER',
+  EMPLOYEE: 'EMPLOYEE'
+};
 
-export interface IUser extends Document {
-  shopId?: mongoose.Types.ObjectId; // Admin has no shopId
-  name: string;
-  email?: string; // Optional for Employee (uses phone/username + OTP conceptually)
-  passwordHash?: string; // For Admin/Owner
-  role: UserRole;
-  isActive: boolean;
-  lastLoginAt?: Date;
-  matchPassword(enteredPassword: string): Promise<boolean>;
-}
-
-const UserSchema: Schema = new Schema({
+const UserSchema = new Schema({
   shopId: { type: Schema.Types.ObjectId, ref: 'Shop' },
   name: { type: String, required: true },
   email: { type: String, unique: true, sparse: true, lowercase: true },
@@ -35,7 +25,7 @@ const UserSchema: Schema = new Schema({
 });
 
 // Encrypt password using bcrypt
-UserSchema.pre<IUser>('save', async function(next) {
+UserSchema.pre('save', async function(next) {
   if (!this.isModified('passwordHash') || !this.passwordHash) {
     next();
   }
@@ -46,9 +36,11 @@ UserSchema.pre<IUser>('save', async function(next) {
 });
 
 // Match user entered password to hashed password in database
-UserSchema.methods.matchPassword = async function(enteredPassword: string): Promise<boolean> {
+UserSchema.methods.matchPassword = async function(enteredPassword) {
   if (!this.passwordHash) return false;
   return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
-export default mongoose.model<IUser>('User', UserSchema);
+const User = mongoose.model('User', UserSchema);
+module.exports = User;
+module.exports.UserRole = UserRole;

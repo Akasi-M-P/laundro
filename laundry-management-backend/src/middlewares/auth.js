@@ -1,15 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import User, { IUser } from '../models/User';
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-interface DecodedToken {
-  id: string;
-  role: string;
-  iat: number;
-  exp: number;
-}
-
-export const protect = async (req: Request, res: Response, next: NextFunction) => {
+const protect = async (req, res, next) => {
   let token;
 
   if (
@@ -19,7 +11,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     try {
       token = req.headers.authorization.split(' ')[1];
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as DecodedToken;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
 
       const user = await User.findById(decoded.id);
       if (!user) {
@@ -42,3 +34,5 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     res.status(401).json({ success: false, message: 'Not authorized, no token' });
   }
 };
+
+module.exports = { protect };

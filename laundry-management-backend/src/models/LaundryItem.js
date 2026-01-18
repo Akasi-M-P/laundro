@@ -1,14 +1,7 @@
-import mongoose, { Document, Schema } from 'mongoose';
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-export interface ILaundryItem extends Document {
-  shopId: mongoose.Types.ObjectId;
-  name: string;
-  size: string; // S, M, L, XL or custom
-  price: number;
-  isActive: boolean;
-}
-
-const LaundryItemSchema: Schema = new Schema({
+const LaundryItemSchema = new Schema({
   shopId: { type: Schema.Types.ObjectId, ref: 'Shop', required: true },
   name: { type: String, required: true, trim: true },
   size: { type: String, required: true },
@@ -19,4 +12,4 @@ const LaundryItemSchema: Schema = new Schema({
 // Composite index to ensure unique item name+size per shop
 LaundryItemSchema.index({ shopId: 1, name: 1, size: 1 }, { unique: true });
 
-export default mongoose.model<ILaundryItem>('LaundryItem', LaundryItemSchema);
+module.exports = mongoose.model('LaundryItem', LaundryItemSchema);
