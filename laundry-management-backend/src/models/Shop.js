@@ -20,6 +20,9 @@ const ShopSchema = new Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Index for subscription status queries
+ShopSchema.index({ subscriptionStatus: 1 });
+
 const Shop = mongoose.model('Shop', ShopSchema);
 module.exports = Shop;
 module.exports.SubscriptionStatus = SubscriptionStatus;

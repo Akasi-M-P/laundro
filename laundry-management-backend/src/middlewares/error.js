@@ -5,12 +5,22 @@ const errorHandler = (err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
 
-  // Log to console for dev
-  logger.error(err);
+  // Log full error details (server-side only)
+  logger.error({
+    error: err.message,
+    stack: err.stack,
+    name: err.name,
+    code: err.code,
+    requestId: req.id || req.headers['x-request-id'],
+    path: req.path,
+    method: req.method
+  });
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
-    const message = `Resource not found with id of ${err.value}`;
+    const message = process.env.NODE_ENV === 'production' 
+      ? 'Resource not found' 
+      : `Resource not found with id of ${err.value}`;
     error = new ErrorResponse(message, 404);
   }
 
@@ -28,8 +38,8 @@ const errorHandler = (err, req, res, next) => {
 
   // JWT errors (handled in auth middleware mostly, but just in case)
   if (err.name === 'JsonWebTokenError') {
-     const message = 'Invalid token';
-     error = new ErrorResponse(message, 401);
+    const message = 'Invalid token';
+    error = new ErrorResponse(message, 401);
   }
 
   if (err.name === 'TokenExpiredError') {
@@ -37,9 +47,17 @@ const errorHandler = (err, req, res, next) => {
     error = new ErrorResponse(message, 401);
   }
 
-  res.status(error.statusCode || 500).json({
+  // In production, don't expose internal error details
+  const isProduction = process.env.NODE_ENV === 'production';
+  const statusCode = error.statusCode || 500;
+  const message = isProduction && statusCode === 500
+    ? 'Internal server error'
+    : error.message || 'Server Error';
+
+  res.status(statusCode).json({
     success: false,
-    message: error.message || 'Server Error'
+    message,
+    ...(isProduction ? {} : { stack: err.stack }) // Only include stack in development
   });
 };
 

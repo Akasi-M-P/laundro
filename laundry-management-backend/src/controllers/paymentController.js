@@ -17,7 +17,7 @@ const recordPayment = asyncHandler(async (req, res, next) => {
 
   // Validate amount
   const paymentAmount = Number(amount);
-  if (isNaN(paymentAmount) || paymentAmount <= 0) {
+  if (Number.isNaN(paymentAmount) || paymentAmount <= 0) {
     return next(new ErrorResponse('Payment amount must be a positive number', 400));
   }
 

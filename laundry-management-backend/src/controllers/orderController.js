@@ -20,13 +20,7 @@ const createOrder = asyncHandler(async (req, res, next) => {
   const { customerId, items, totalAmount, amountPaid, offlineId, createdAt } = req.body;
   const user = req.user;
 
-  // 1. Check Shop Subscription Status
-  const shop = await Shop.findById(user.shopId);
-  if (!shop || shop.subscriptionStatus === SubscriptionStatus.SUSPENDED) {
-    return next(new ErrorResponse('Shop is suspended. Cannot create orders.', 403));
-  }
-
-  // 2. Validate Customer exists and belongs to shop
+  // 1. Validate Customer exists and belongs to shop
   const customer = await Customer.findOne({ _id: customerId, shopId: user.shopId });
   if (!customer) {
     return next(new ErrorResponse('Customer not found or does not belong to your shop', 404));

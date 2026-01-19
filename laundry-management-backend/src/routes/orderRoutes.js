@@ -2,11 +2,13 @@ const express = require('express');
 const { createOrder, markReady, collectOrder } = require('../controllers/orderController');
 const { protect } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/rbac');
+const { checkSubscription } = require('../middlewares/subscriptionCheck');
 const { UserRole } = require('../models/User');
 
 const router = express.Router();
 
 router.use(protect); // All routes require login
+router.use(checkSubscription); // Check subscription status for all order operations
 
 // Create Order: Employee or Owner
 router.post('/', [
@@ -37,10 +39,8 @@ router.post('/:id/collect', [
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),
     (req, res, next) => {
         const { check, validationResult } = require('express-validator');
-        Promise.all([
-            check('pin', 'PIN is required').not().isEmpty().run(req)
-        ]).then(() => {
-             const errors = validationResult(req);
+        check('pin', 'PIN is required').not().isEmpty().run(req).then(() => {
+            const errors = validationResult(req);
             if (!errors.isEmpty()) {
                 return next({ name: 'ValidationError', message: errors.array()[0].msg, statusCode: 400 });
             }

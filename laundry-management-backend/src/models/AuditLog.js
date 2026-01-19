@@ -11,8 +11,10 @@ const AuditLogSchema = new Schema({
   timestamp: { type: Date, default: Date.now, immutable: true }
 });
 
-// Index for fast querying by shop or actor
-AuditLogSchema.index({ entityId: 1, timestamp: -1 });
-AuditLogSchema.index({ actorId: 1, timestamp: -1 });
+// Indexes for audit log queries
+AuditLogSchema.index({ entityId: 1, timestamp: -1 }); // Audit trail for an entity
+AuditLogSchema.index({ actorId: 1, timestamp: -1 }); // Actions by a user
+AuditLogSchema.index({ action: 1, timestamp: -1 }); // Find specific action types
+AuditLogSchema.index({ actorRole: 1, timestamp: -1 }); // Actions by role
 
 module.exports = mongoose.model('AuditLog', AuditLogSchema);

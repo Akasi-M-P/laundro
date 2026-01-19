@@ -2,11 +2,13 @@ const express = require('express');
 const { recordPayment } = require('../controllers/paymentController');
 const { protect } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/rbac');
+const { checkSubscription } = require('../middlewares/subscriptionCheck');
 const { UserRole } = require('../models/User');
 
 const router = express.Router();
 
 router.use(protect);
+router.use(checkSubscription); // Check subscription status for all payment operations
 
 router.post('/', [
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),

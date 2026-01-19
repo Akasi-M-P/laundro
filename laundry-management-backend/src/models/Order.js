@@ -45,8 +45,12 @@ OrderSchema.pre('save', function(next) {
   next();
 });
 
+// Indexes for common queries
 OrderSchema.index({ shopId: 1, status: 1 });
 OrderSchema.index({ shopId: 1, createdAt: -1 });
+OrderSchema.index({ shopId: 1, customerId: 1 }); // Find orders by customer
+OrderSchema.index({ shopId: 1, status: 1, createdAt: -1 }); // Compound index for filtered lists
+OrderSchema.index({ offlineId: 1 }); // For offline sync lookups
 
 const Order = mongoose.model('Order', OrderSchema);
 module.exports = Order;

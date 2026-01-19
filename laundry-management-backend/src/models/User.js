@@ -41,6 +41,11 @@ UserSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
+// Indexes for user queries
+UserSchema.index({ shopId: 1, role: 1 }); // Find employees/owners by shop
+UserSchema.index({ email: 1 }); // Login lookups (unique index already exists, but explicit is good)
+UserSchema.index({ shopId: 1, isActive: 1 }); // Active users by shop
+
 const User = mongoose.model('User', UserSchema);
 module.exports = User;
 module.exports.UserRole = UserRole;

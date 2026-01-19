@@ -19,7 +19,11 @@ const PaymentSchema = new Schema({
   createdAt: { type: Date, default: Date.now }
 }, { timestamps: false }); // Schema had manual createdAt but no timestamps: true in TS
 
+// Indexes for payment queries
 PaymentSchema.index({ orderId: 1 });
+PaymentSchema.index({ orderId: 1, createdAt: -1 }); // Payment history for an order
+PaymentSchema.index({ receivedBy: 1, createdAt: -1 }); // Payments received by user
+PaymentSchema.index({ offlineId: 1 }); // For offline sync lookups
 
 const Payment = mongoose.model('Payment', PaymentSchema);
 module.exports = Payment;
