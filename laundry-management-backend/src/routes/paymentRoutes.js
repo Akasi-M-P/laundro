@@ -1,5 +1,5 @@
 const express = require('express');
-const { recordPayment } = require('../controllers/paymentController');
+const { recordPayment, getPayments } = require('../controllers/paymentController');
 const { protect } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/rbac');
 const { checkSubscription } = require('../middlewares/subscriptionCheck');
@@ -9,6 +9,36 @@ const router = express.Router();
 
 router.use(protect);
 router.use(checkSubscription); // Check subscription status for all payment operations
+
+/**
+ * @swagger
+ * /api/v1/payments:
+ *   get:
+ *     summary: Get all payments for a shop
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: orderId
+ *         schema:
+ *           type: string
+ *         description: Filter by order ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: List of payments
+ */
+router.get('/', authorize(UserRole.OWNER, UserRole.EMPLOYEE), getPayments);
 
 router.post('/', [
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),

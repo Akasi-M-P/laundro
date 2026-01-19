@@ -110,4 +110,56 @@ const recordPayment = asyncHandler(async (req, res, next) => {
   res.status(201).json({ success: true, data: payment });
 });
 
-module.exports = { recordPayment };
+/**
+ * @desc    Get all payments for a shop (with pagination)
+ * @route   GET /api/payments
+ * @access  Employee/Owner
+ */
+const getPayments = asyncHandler(async (req, res, next) => {
+  const { orderId, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+  const user = req.user;
+
+  // Build query - get payments for orders belonging to this shop
+  const query = {};
+  if (orderId) {
+    // Verify order belongs to shop
+    const order = await Order.findOne({ _id: orderId, shopId: user.shopId });
+    if (!order) {
+      return next(new ErrorResponse('Order not found', 404));
+    }
+    query.orderId = orderId;
+  } else {
+    // Get all orders for this shop, then get their payments
+    const shopOrders = await Order.find({ shopId: user.shopId }).select('_id');
+    const orderIds = shopOrders.map(o => o._id);
+    query.orderId = { $in: orderIds };
+  }
+
+  // Pagination
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+
+  // Execute query
+  const [payments, total] = await Promise.all([
+    Payment.find(query)
+      .populate('orderId', 'customerId totalAmount status')
+      .populate('receivedBy', 'name email')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Payment.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: payments,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  });
+});
+
+module.exports = { recordPayment, getPayments };

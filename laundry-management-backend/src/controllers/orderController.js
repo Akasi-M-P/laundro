@@ -177,8 +177,88 @@ const collectOrder = asyncHandler(async (req, res, next) => {
   res.json({ success: true, data: order });
 });
 
+/**
+ * @desc    Get all orders for a shop (with pagination)
+ * @route   GET /api/orders
+ * @access  Employee/Owner
+ */
+const getOrders = asyncHandler(async (req, res, next) => {
+  const { status, customerId, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+  const user = req.user;
+
+  // Build query
+  const query = { shopId: user.shopId };
+  if (status) {
+    query.status = status;
+  }
+  if (customerId) {
+    query.customerId = customerId;
+  }
+
+  // Pagination
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+
+  // Execute query
+  const [orders, total] = await Promise.all([
+    Order.find(query)
+      .populate('customerId', 'name phoneNumber')
+      .populate('createdBy', 'name email')
+      .populate('collectedBy', 'name email')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Order.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: orders,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  });
+});
+
+/**
+ * @desc    Get single order by ID
+ * @route   GET /api/orders/:id
+ * @access  Employee/Owner
+ */
+const getOrder = asyncHandler(async (req, res, next) => {
+  const order = await Order.findOne({ 
+    _id: req.params.id, 
+    shopId: req.user.shopId 
+  })
+    .populate('customerId', 'name phoneNumber')
+    .populate('createdBy', 'name email')
+    .populate('collectedBy', 'name email');
+
+  if (!order) {
+    return next(new ErrorResponse('Order not found', 404));
+  }
+
+  // Get payments for this order
+  const payments = await Payment.find({ orderId: order._id })
+    .populate('receivedBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  res.json({
+    success: true,
+    data: {
+      ...order.toObject(),
+      payments
+    }
+  });
+});
+
 module.exports = {
   createOrder,
   markReady,
-  collectOrder
+  collectOrder,
+  getOrders,
+  getOrder
 };

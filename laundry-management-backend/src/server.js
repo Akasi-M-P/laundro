@@ -11,6 +11,7 @@ const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const shopRoutes = require("./routes/shopRoutes");
+const customerRoutes = require("./routes/customerRoutes");
 
 // Load env vars
 dotenv.config({ path: "./config.env" }); // Adjust path if needed
@@ -77,10 +78,22 @@ if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
 
+// Swagger Documentation
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
+  const swaggerUi = require('swagger-ui-express');
+  const swaggerSpec = require('./config/swagger');
+  
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Laundro API Documentation'
+  }));
+}
+
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/shops", shopRoutes);
 
 // Health Check
