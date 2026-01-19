@@ -1,15 +1,18 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Shop = require('../models/Shop');
+const asyncHandler = require('../middlewares/async');
+const ErrorResponse = require('../utils/errorResponse');
 // Destructure enums/constants attached to models
 const { UserRole } = User;
 const { SubscriptionStatus } = Shop;
-// const { logAudit } = require('../utils/logger'); // Unused in original TS, but imported
 
 // Helper to sign JWT
-// Helper to sign JWT
 const generateToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET || 'secret', {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '1d'
   });
 };
@@ -19,75 +22,67 @@ const generateToken = (id, role) => {
  * @route   POST /api/auth/register-shop
  * @access  Public
  */
-const registerShop = async (req, res) => {
+const registerShop = asyncHandler(async (req, res, next) => {
   const { businessName, phone, location, ownerName, email, password } = req.body;
 
-  try {
-    // 1. Create Shop
-    const shop = await Shop.create({
-      businessName,
-      phone,
-      location,
-      subscriptionStatus: SubscriptionStatus.ACTIVE
-    });
+  // 1. Create Shop
+  const shop = await Shop.create({
+    businessName,
+    phone,
+    location,
+    subscriptionStatus: SubscriptionStatus.ACTIVE
+  });
 
-    // 2. Create Owner User
-    const user = await User.create({
-      shopId: shop._id,
-      name: ownerName,
-      email,
-      passwordHash: password,
-      role: UserRole.OWNER,
-      isActive: true
-    });
+  // 2. Create Owner User
+  const user = await User.create({
+    shopId: shop._id,
+    name: ownerName,
+    email,
+    passwordHash: password,
+    role: UserRole.OWNER,
+    isActive: true
+  });
 
-    // 3. Generate Token
-    const token = generateToken(user.id, user.role);
+  // 3. Generate Token
+  const token = generateToken(user.id, user.role);
 
-    res.status(201).json({
-      success: true,
-      data: {
-        shop,
-        user: { _id: user._id, name: user.name, email: user.email, role: user.role },
-        token
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
+  res.status(201).json({
+    success: true,
+    data: {
+      shop,
+      user: { _id: user._id, name: user.name, email: user.email, role: user.role },
+      token
+    }
+  });
+});
 
 /**
  * @desc    Login for Admin/Owner (Password based)
  * @route   POST /api/auth/login
  * @access  Public
  */
-const login = async (req, res) => {
+const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
 
-  try {
-    const user = await User.findOne({ email }).select('+passwordHash');
+  const user = await User.findOne({ email }).select('+passwordHash');
 
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-
-    if (!user.isActive) {
-      return res.status(401).json({ success: false, message: 'User is deactivated' });
-    }
-
-    const token = generateToken(user.id, user.role);
-    user.lastLoginAt = new Date();
-    await user.save();
-
-    res.json({
-      success: true,
-      token
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+  if (!user || !(await user.matchPassword(password))) {
+    return next(new ErrorResponse('Invalid credentials', 401));
   }
-};
+
+  if (!user.isActive) {
+    return next(new ErrorResponse('User is deactivated', 401));
+  }
+
+  const token = generateToken(user.id, user.role);
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  res.json({
+    success: true,
+    token
+  });
+});
 
 /**
  * @desc    Request OTP for Employee Login
@@ -95,74 +90,107 @@ const login = async (req, res) => {
  * @access  Public
  */
 const Otp = require('../models/Otp');
+const { generateOtp } = require('../utils/otp');
+const { logAudit } = require('../utils/logger');
 
 /**
  * @desc    Request OTP for Employee Login
  * @route   POST /api/auth/otp-request
  * @access  Public
  */
-const requestOtp = async (req, res) => {
+const requestOtp = asyncHandler(async (req, res, next) => {
   const { phoneNumber } = req.body;
 
-  try {
-    const user = await User.findOne({ email: phoneNumber, role: UserRole.EMPLOYEE });
-    
-    if (!user) {
-         return res.status(404).json({ success: false, message: 'Employee not found' });
-    }
-
-    // Mock OTP generation
-    const otp = '123456';
-    
-    // Clear existing OTPs for this number
-    await Otp.deleteMany({ phoneNumber });
-    
-    // Save new OTP to DB
-    await Otp.create({
-      phoneNumber,
-      otp
+  const user = await User.findOne({ email: phoneNumber, role: UserRole.EMPLOYEE });
+  
+  if (!user) {
+    // Don't reveal if user exists or not (security best practice)
+    return res.status(200).json({ 
+      success: true, 
+      message: 'If the employee exists, an OTP has been sent' 
     });
-
-    console.log(`[MOCK OTP] OTP for ${phoneNumber} is ${otp}`);
-
-    res.json({ success: true, message: 'OTP sent (Check console)' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
   }
-};
+
+  // Rate limiting: Check for recent OTP requests (within last 1 minute)
+  const recentOtp = await Otp.findOne({ 
+    phoneNumber, 
+    createdAt: { $gte: new Date(Date.now() - 60000) } // Last 60 seconds
+  });
+
+  if (recentOtp) {
+    return next(new ErrorResponse('Please wait before requesting another OTP', 429));
+  }
+
+  // Generate secure 6-digit OTP
+  const otp = generateOtp();
+  
+  // Clear existing OTPs for this number
+  await Otp.deleteMany({ phoneNumber });
+  
+  // Save new OTP to DB (auto-expires after 10 minutes per schema)
+  await Otp.create({
+    phoneNumber,
+    otp
+  });
+
+  // TODO: In production, send OTP via SMS/WhatsApp
+  // Example: await sendSMS(phoneNumber, `Your login OTP is: ${otp}. Valid for 10 minutes.`);
+  // For now, log for development (remove in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[DEV OTP] OTP for ${phoneNumber} is ${otp} (expires in 10 minutes)`);
+  }
+
+  // Log audit event (without OTP)
+  await logAudit(user, 'OTP_REQUESTED', 'User', user._id, { phoneNumber });
+
+  res.json({ 
+    success: true, 
+    message: 'OTP sent successfully' 
+  });
+});
 
 /**
  * @desc    Verify OTP and Login
  * @route   POST /api/auth/otp-verify
  * @access  Public
  */
-const verifyOtp = async (req, res) => {
+const verifyOtp = asyncHandler(async (req, res, next) => {
   const { phoneNumber, otp } = req.body;
 
-  try {
-    // Find valid OTP
-    const validOtp = await Otp.findOne({ phoneNumber, otp });
+  // Find valid OTP
+  const validOtp = await Otp.findOne({ phoneNumber, otp });
 
-    if (validOtp) {
-      const user = await User.findOne({ email: phoneNumber });
-      if (!user) return res.status(401).json({ success: false, message: 'User not found' });
-
-      const token = generateToken(user.id, user.role);
-      
-      // Delete used OTP (Single use)
-      await Otp.deleteOne({ _id: validOtp._id });
-
-      user.lastLoginAt = new Date();
-      await user.save();
-
-      res.json({ success: true, token });
-    } else {
-      res.status(401).json({ success: false, message: 'Invalid or expired OTP' });
+  if (validOtp) {
+    const user = await User.findOne({ email: phoneNumber });
+    if (!user) {
+      return next(new ErrorResponse('Invalid or expired OTP', 401));
     }
-  } catch (error) {
-     res.status(500).json({ success: false, message: error.message });
+
+    if (!user.isActive) {
+      return next(new ErrorResponse('User is deactivated', 401));
+    }
+
+    const token = generateToken(user.id, user.role);
+    
+    // Delete used OTP (Single use)
+    await Otp.deleteOne({ _id: validOtp._id });
+
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    // Log successful OTP verification
+    await logAudit(user, 'OTP_VERIFIED', 'User', user._id, { phoneNumber });
+
+    res.json({ success: true, token });
+  } else {
+    // Log failed OTP attempt
+    const user = await User.findOne({ email: phoneNumber });
+    if (user) {
+      await logAudit(user, 'OTP_VERIFICATION_FAILED', 'User', user._id, { phoneNumber });
+    }
+    return next(new ErrorResponse('Invalid or expired OTP', 401));
   }
-};
+});
 
 module.exports = {
   registerShop,

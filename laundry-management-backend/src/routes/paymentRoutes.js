@@ -8,6 +8,21 @@ const router = express.Router();
 
 router.use(protect);
 
-router.post('/', authorize(UserRole.OWNER, UserRole.EMPLOYEE), recordPayment);
+router.post('/', [
+    authorize(UserRole.OWNER, UserRole.EMPLOYEE),
+    (req, res, next) => {
+        const { check, validationResult } = require('express-validator');
+        Promise.all([
+            check('orderId', 'Order ID is required').not().isEmpty().run(req),
+            check('amount', 'Amount must be a number').isNumeric().run(req)
+        ]).then(() => {
+             const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return next({ name: 'ValidationError', message: errors.array()[0].msg, statusCode: 400 });
+            }
+            next();
+        });
+    }
+], recordPayment);
 
 module.exports = router;

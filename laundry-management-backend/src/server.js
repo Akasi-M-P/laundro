@@ -15,6 +15,10 @@ const shopRoutes = require("./routes/shopRoutes");
 // Load env vars
 dotenv.config({ path: "./config.env" }); // Adjust path if needed
 
+// Validate required environment variables
+const { validateEnv } = require('./config/validateEnv');
+validateEnv();
+
 // Connect to database
 connectDB();
 
@@ -37,6 +41,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Http Logger
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
@@ -52,10 +57,14 @@ app.get("/", (req, res) => {
   res.send("Laundry Management API is running...");
 });
 
+const errorHandler = require('./middlewares/error');
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  const { logger } = require('./utils/logger');
+  logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
 // Handle unhandled promise rejections
