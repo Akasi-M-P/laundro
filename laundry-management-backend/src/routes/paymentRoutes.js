@@ -3,9 +3,16 @@ const { recordPayment, getPayments } = require('../controllers/paymentController
 const { protect } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/rbac');
 const { checkSubscription } = require('../middlewares/subscriptionCheck');
+const { createStrictRateLimiter } = require('../middlewares/rateLimiter');
 const { UserRole } = require('../models/User');
 
 const router = express.Router();
+
+// Rate limiter for payment operations
+const paymentLimiter = createStrictRateLimiter({
+  max: 30, // 30 payments per 5 minutes per shop
+  message: 'Too many payment requests. Please slow down.'
+});
 
 router.use(protect);
 router.use(checkSubscription); // Check subscription status for all payment operations
@@ -41,6 +48,7 @@ router.use(checkSubscription); // Check subscription status for all payment oper
 router.get('/', authorize(UserRole.OWNER, UserRole.EMPLOYEE), getPayments);
 
 router.post('/', [
+    paymentLimiter,
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),
     (req, res, next) => {
         const { check, validationResult } = require('express-validator');

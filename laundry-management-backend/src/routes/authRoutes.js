@@ -1,19 +1,13 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { check, validationResult } = require('express-validator');
 const { registerShop, login, requestOtp, verifyOtp } = require('../controllers/authController');
+const { createOTPRateLimiter } = require('../middlewares/rateLimiter');
 const ErrorResponse = require('../utils/errorResponse');
 
 const router = express.Router();
 
-// Stricter rate limiting for OTP requests (prevent abuse)
-const otpRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 3, // Max 3 OTP requests per 15 minutes per IP
-  message: 'Too many OTP requests. Please try again after 15 minutes.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limiter for OTP requests
+const otpRateLimiter = createOTPRateLimiter();
 
 // Validation Middleware Helper
 const validate = (validations) => {

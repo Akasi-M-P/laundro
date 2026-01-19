@@ -10,6 +10,7 @@ const { generatePin, hashPin, verifyPin } = require('../utils/pin');
 const { logAudit } = require('../utils/logger');
 const asyncHandler = require('../middlewares/async');
 const ErrorResponse = require('../utils/errorResponse');
+const smsService = require('../services/smsService');
 
 /**
  * @desc    Create new order (Offline compatible)
@@ -118,14 +119,35 @@ const markReady = asyncHandler(async (req, res, next) => {
   order.status = OrderStatus.READY;
   await order.save();
 
-  await logAudit(req.user, 'MARK_READY', 'Order', order._id, { 
-    note: 'PIN generated and sent to customer' 
-  });
-
-  // TODO: Send PIN via SMS/WhatsApp to customer
-  // For now, PIN is securely stored and will be verified on collection
-  // In production, integrate with SMS gateway (Twilio, AWS SNS, etc.)
-  // Example: await sendSMS(customer.phoneNumber, `Your pickup PIN is: ${plainPin}`);
+  // Get customer to send PIN
+  const customer = await Customer.findById(order.customerId);
+  
+  // Send PIN via SMS (non-blocking - don't fail order if SMS fails)
+  if (customer && customer.phoneNumber) {
+    try {
+      const smsSent = await smsService.sendPickupPIN(
+        customer.phoneNumber, 
+        plainPin, 
+        order._id.toString()
+      );
+      
+      await logAudit(req.user, 'MARK_READY', 'Order', order._id, { 
+        note: 'PIN generated and sent to customer',
+        smsSent
+      });
+    } catch (smsError) {
+      // Log SMS error but don't fail the request
+      logger.error('Failed to send pickup PIN via SMS:', smsError);
+      await logAudit(req.user, 'MARK_READY', 'Order', order._id, { 
+        note: 'PIN generated but SMS sending failed',
+        smsError: smsError.message
+      });
+    }
+  } else {
+    await logAudit(req.user, 'MARK_READY', 'Order', order._id, { 
+      note: 'PIN generated but customer phone number not found'
+    });
+  }
 
   res.json({ 
     success: true, 

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Shop = require('../models/Shop');
 const asyncHandler = require('../middlewares/async');
 const ErrorResponse = require('../utils/errorResponse');
+const { logger } = require('../utils/logger');
 // Destructure enums/constants attached to models
 const { UserRole } = User;
 const { SubscriptionStatus } = Shop;
@@ -92,6 +93,7 @@ const login = asyncHandler(async (req, res, next) => {
 const Otp = require('../models/Otp');
 const { generateOtp } = require('../utils/otp');
 const { logAudit } = require('../utils/logger');
+const smsService = require('../services/smsService');
 
 /**
  * @desc    Request OTP for Employee Login
@@ -127,21 +129,28 @@ const requestOtp = asyncHandler(async (req, res, next) => {
   // Clear existing OTPs for this number
   await Otp.deleteMany({ phoneNumber });
   
-  // Save new OTP to DB (auto-expires after 10 minutes per schema)
-  await Otp.create({
-    phoneNumber,
-    otp
-  });
+    // Save new OTP to DB (auto-expires after 10 minutes per schema)
+    await Otp.create({
+      phoneNumber,
+      otp
+    });
 
-  // TODO: In production, send OTP via SMS/WhatsApp
-  // Example: await sendSMS(phoneNumber, `Your login OTP is: ${otp}. Valid for 10 minutes.`);
-  // For now, log for development (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[DEV OTP] OTP for ${phoneNumber} is ${otp} (expires in 10 minutes)`);
-  }
+    // Send OTP via SMS (non-blocking)
+    let smsSent = false;
+    try {
+      smsSent = await smsService.sendOTP(phoneNumber, otp);
+    } catch (smsError) {
+      // Log SMS error but don't fail the request
+      logger.error('Failed to send OTP via SMS:', smsError);
+    }
 
-  // Log audit event (without OTP)
-  await logAudit(user, 'OTP_REQUESTED', 'User', user._id, { phoneNumber });
+    // In development, also log to console for testing
+    if (process.env.NODE_ENV === 'development' && !smsSent) {
+      console.log(`[DEV OTP] OTP for ${phoneNumber} is ${otp} (expires in 10 minutes)`);
+    }
+
+    // Log audit event (without OTP)
+    await logAudit(user, 'OTP_REQUESTED', 'User', user._id, { phoneNumber, smsSent });
 
   res.json({ 
     success: true, 

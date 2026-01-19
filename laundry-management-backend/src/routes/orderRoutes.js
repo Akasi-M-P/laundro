@@ -3,9 +3,21 @@ const { createOrder, markReady, collectOrder, getOrders, getOrder } = require('.
 const { protect } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/rbac');
 const { checkSubscription } = require('../middlewares/subscriptionCheck');
+const { createStrictRateLimiter } = require('../middlewares/rateLimiter');
 const { UserRole } = require('../models/User');
 
 const router = express.Router();
+
+// Rate limiters
+const orderCreationLimiter = createStrictRateLimiter({
+  max: 50, // 50 orders per 5 minutes per shop
+  message: 'Too many order creation requests. Please slow down.'
+});
+
+const orderActionLimiter = createStrictRateLimiter({
+  max: 100, // 100 actions per 5 minutes per shop
+  message: 'Too many order actions. Please slow down.'
+});
 
 router.use(protect); // All routes require login
 router.use(checkSubscription); // Check subscription status for all order operations
@@ -107,8 +119,9 @@ router.get('/:id', authorize(UserRole.OWNER, UserRole.EMPLOYEE), getOrder);
  *       201:
  *         description: Order created
  */
-// Create Order: Employee or Owner
+// Create Order: Employee or Owner (with rate limiting)
 router.post('/', [
+    orderCreationLimiter,
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),
     (req, res, next) => {
         const { check, validationResult } = require('express-validator');
@@ -146,8 +159,8 @@ router.post('/', [
  *       200:
  *         description: Order marked as ready
  */
-// Mark Ready: Employee or Owner
-router.put('/:id/ready', authorize(UserRole.OWNER, UserRole.EMPLOYEE), markReady);
+// Mark Ready: Employee or Owner (with rate limiting)
+router.put('/:id/ready', orderActionLimiter, authorize(UserRole.OWNER, UserRole.EMPLOYEE), markReady);
 
 /**
  * @swagger
@@ -180,8 +193,9 @@ router.put('/:id/ready', authorize(UserRole.OWNER, UserRole.EMPLOYEE), markReady
  *       401:
  *         description: Invalid PIN
  */
-// Collect: Employee or Owner
+// Collect: Employee or Owner (with rate limiting)
 router.post('/:id/collect', [
+    orderActionLimiter,
     authorize(UserRole.OWNER, UserRole.EMPLOYEE),
     (req, res, next) => {
         const { check, validationResult } = require('express-validator');
