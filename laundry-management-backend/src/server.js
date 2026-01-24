@@ -12,6 +12,13 @@ validateEnv();
 // Connect to database
 connectDB();
 
+// Initialize cache service
+const { cacheService } = require("./config/cache");
+cacheService.connect().catch((error) => {
+  const { logger } = require("./utils/logger");
+  logger.error("Failed to initialize cache service:", error);
+});
+
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
@@ -60,4 +67,3 @@ process.on("uncaughtException", (err) => {
 // Graceful shutdown on SIGTERM and SIGINT
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-

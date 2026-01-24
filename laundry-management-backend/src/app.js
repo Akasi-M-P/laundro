@@ -46,27 +46,97 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-// Middleware
-app.use(cors(corsOptions));
-app.use(express.json({ limit: "10mb" })); // Add body size limit
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// Request size limits and parsing
+const bodyParser = require("body-parser");
+
+// Enhanced body parsing with proper size limits
+app.use(
+  express.json({
+    limit: process.env.REQUEST_SIZE_LIMIT || "1mb", // Default 1MB for JSON
+    strict: true, // Only accept arrays and objects
+    verify: (req, res, buf) => {
+      // Store raw body for webhook verification if needed
+      req.rawBody = buf;
+    },
+  }),
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: process.env.REQUEST_SIZE_LIMIT || "1mb", // Default 1MB for URL-encoded
+  }),
+);
+
+// Raw body parser for specific routes (like webhooks) that need raw data
+app.use(
+  bodyParser.raw({
+    type: "application/octet-stream",
+    limit: process.env.FILE_UPLOAD_LIMIT || "10mb", // Separate limit for file uploads
+  }),
+);
 
 // Security Middleware
-app.use(helmet()); // Set security headers
-// app.use(
-//   mongoSanitize({
-//     replaceWith: "_",
-//   }),
-// ); // Prevent NoSQL injection
-// app.use(xss()); // Prevent XSS attacks
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  }),
+);
 
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again after 10 minutes",
+// Enable security middleware
+app.use(mongoSanitize({ replaceWith: "_" })); // Prevent NoSQL injection
+app.use(xss()); // Prevent XSS attacks
+
+// Enhanced Rate Limiting
+const {
+  createUserRateLimiter,
+  createStrictRateLimiter,
+  createOTPRateLimiter,
+} = require("./middlewares/rateLimiter");
+
+// Global IP-based rate limiting (fallback)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.GLOBAL_RATE_LIMIT) || 1000, // requests per window
+  message: {
+    success: false,
+    message: "Too many requests from this IP, please try again later",
+    retryAfter: 900, // 15 minutes in seconds
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use(limiter);
+
+// Apply global rate limiting to all routes
+app.use(globalLimiter);
+
+// User/shop-based rate limiting for authenticated routes
+const userLimiter = createUserRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.USER_RATE_LIMIT) || 500, // requests per user/shop
+  message: "Too many requests from your account, please try again later",
+});
+
+// Apply user-based rate limiting to authenticated routes only
+app.use("/api/v1", userLimiter);
+
+// Strict rate limiting for sensitive operations
+const strictLimiter = createStrictRateLimiter();
+
+// OTP rate limiting
+const otpLimiter = createOTPRateLimiter();
 
 // Http Logger
 if (process.env.NODE_ENV === "development") {
@@ -125,6 +195,12 @@ app.get("/", async (req, res) => {
 // Detailed health check endpoint
 app.get("/health", async (req, res) => {
   const mongoose = require("mongoose");
+  const { cacheService } = require("./config/cache");
+
+  const dbStatus =
+    mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+  const cacheHealth = await cacheService.healthCheck();
+
   const health = {
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -134,19 +210,25 @@ app.get("/health", async (req, res) => {
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + " MB",
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + " MB",
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + " MB",
     },
     services: {
       database: {
-        status:
-          mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+        status: dbStatus,
         host: mongoose.connection.host || "unknown",
         name: mongoose.connection.name || "unknown",
       },
+      cache: cacheHealth,
     },
   };
 
   // Check if all services are healthy
-  const allHealthy = health.services.database.status === "connected";
+  const dbHealthy = health.services.database.status === "connected";
+  const cacheHealthy =
+    health.services.cache.status === "healthy" ||
+    health.services.cache.status === "disconnected"; // Cache is optional
+  const allHealthy = dbHealthy;
+
   health.status = allHealthy ? "ok" : "degraded";
 
   res.status(allHealthy ? 200 : 503).json(health);
