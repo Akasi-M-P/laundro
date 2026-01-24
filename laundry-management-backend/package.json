@@ -6,8 +6,15 @@
   "scripts": {
     "test": "jest --verbose --coverage",
     "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=unit --verbose --coverage",
+    "test:integration": "jest --testPathPattern=integration --verbose --coverage",
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
+    "format": "prettier --write src/**/*.{js,json}",
+    "format:check": "prettier --check src/**/*.{js,json}",
+    "code:check": "npm run lint && npm run format:check && npm run test"
   },
   "author": "Peter Mba Akasi",
   "license": "ISC",
@@ -33,6 +40,8 @@
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "eslint": "^8.57.0",
+    "nodemon": "^3.1.11",
+    "prettier": "^3.3.2"
   }
 }
