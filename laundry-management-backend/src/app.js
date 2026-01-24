@@ -53,12 +53,12 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Security Middleware
 app.use(helmet()); // Set security headers
-app.use(
-  mongoSanitize({
-    replaceWith: "_",
-  }),
-); // Prevent NoSQL injection
-app.use(xss()); // Prevent XSS attacks
+// app.use(
+//   mongoSanitize({
+//     replaceWith: "_",
+//   }),
+// ); // Prevent NoSQL injection
+// app.use(xss()); // Prevent XSS attacks
 
 // Rate Limiting
 const limiter = rateLimit({

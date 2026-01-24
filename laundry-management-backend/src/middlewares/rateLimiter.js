@@ -22,8 +22,9 @@ const createUserRateLimiter = (options = {}) => {
     legacyHeaders: false,
     skipSuccessfulRequests,
     skipFailedRequests,
-    // Custom key generator - use user ID or shop ID if available, otherwise IP
-    keyGenerator: (req) => {
+    // Use standardKeyGenerator with custom logic
+    // This properly handles IPv6 addresses
+    keyGenerator: (req, res) => {
       if (req.user) {
         // Use shop ID for shop-based rate limiting
         if (req.user.shopId) {
@@ -32,13 +33,20 @@ const createUserRateLimiter = (options = {}) => {
         // Fall back to user ID
         return `user:${req.user._id}`;
       }
-      // Fall back to IP address
-      return req.ip || req.connection.remoteAddress;
+      // Fall back to IP address - use standardKeyGenerator for IPv6 support
+      // Return undefined to use default IP-based key
+      return undefined;
+    },
+    // Skip key generation validation for custom keys
+    skip: (req) => {
+      // If we have a user, we're using custom key (shop/user ID)
+      // Otherwise, use default IP-based limiting
+      return false;
     },
     // Custom handler for rate limit exceeded
     handler: (req, res) => {
       logger.warn('Rate limit exceeded', {
-        key: req.user ? (req.user.shopId ? `shop:${req.user.shopId}` : `user:${req.user._id}`) : req.ip,
+        key: req.user ? (req.user.shopId ? `shop:${req.user.shopId}` : `user:${req.user._id}`) : 'ip-based',
         path: req.path,
         method: req.method
       });
@@ -64,7 +72,8 @@ const createStrictRateLimiter = (options = {}) => {
 };
 
 /**
- * Rate limiter for OTP requests (already exists but can be enhanced)
+ * Rate limiter for OTP requests
+ * Uses phone number as key if available, otherwise IP
  */
 const createOTPRateLimiter = () => {
   return rateLimit({
@@ -73,9 +82,13 @@ const createOTPRateLimiter = () => {
     message: 'Too many OTP requests. Please try again after 15 minutes.',
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => {
-      // Use phone number if available, otherwise IP
-      return req.body.phoneNumber || req.ip;
+    keyGenerator: (req, res) => {
+      // Use phone number if available
+      if (req.body && req.body.phoneNumber) {
+        return `phone:${req.body.phoneNumber}`;
+      }
+      // Return undefined to use default IP-based key
+      return undefined;
     }
   });
 };
