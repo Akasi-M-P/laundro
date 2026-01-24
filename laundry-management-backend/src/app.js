@@ -10,12 +10,21 @@ const orderRoutes = require("./routes/orderRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const customerRoutes = require("./routes/customerRoutes");
+const metricsRoutes = require("./routes/metricsRoutes");
 
 const app = express();
 
 // Request ID middleware (should be first)
 const requestId = require("./middlewares/requestId");
 app.use(requestId);
+
+// Performance metrics middleware (after request ID, before other middleware)
+const {
+  performanceMetrics,
+  usageTracker,
+} = require("./middlewares/performanceMetrics");
+app.use(performanceMetrics);
+app.use(usageTracker);
 
 // CORS Configuration
 const corsOptions = {
@@ -167,6 +176,9 @@ app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/shops", shopRoutes);
+
+// Monitoring routes (public access for monitoring systems)
+app.use("/metrics", metricsRoutes);
 
 // Health Check
 app.get("/", async (req, res) => {

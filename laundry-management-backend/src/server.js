@@ -19,6 +19,20 @@ cacheService.connect().catch((error) => {
   logger.error("Failed to initialize cache service:", error);
 });
 
+// Initialize alerting system
+const { alertManager } = require("./utils/alerting");
+alertManager.start({
+  checkInterval: parseInt(process.env.ALERT_CHECK_INTERVAL) || 60000, // 1 minute default
+  thresholds: {
+    responseTime: parseInt(process.env.ALERT_RESPONSE_TIME_THRESHOLD) || 5000, // 5 seconds
+    errorRate: parseFloat(process.env.ALERT_ERROR_RATE_THRESHOLD) || 0.05, // 5%
+    memoryUsage: parseFloat(process.env.ALERT_MEMORY_THRESHOLD) || 0.8, // 80%
+    cpuUsage: parseFloat(process.env.ALERT_CPU_THRESHOLD) || 0.9, // 90%
+    dbConnections:
+      parseFloat(process.env.ALERT_DB_CONNECTIONS_THRESHOLD) || 0.9, // 90%
+  },
+});
+
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
